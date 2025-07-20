@@ -3,6 +3,8 @@ import express2 from "express";
 
 // server/routes.ts
 import { createServer } from "http";
+import axios from "axios";
+import esphomeApi from "esphome-native-api";
 
 // server/storage.ts
 var MemStorage = class {
@@ -26,7 +28,7 @@ var MemStorage = class {
     const device = {
       ...insertDevice,
       id,
-      port: insertDevice.port || 6053,
+      port: insertDevice.port || 80,
       deviceType: insertDevice.deviceType || "unknown",
       autoDiscover: insertDevice.autoDiscover !== void 0 ? insertDevice.autoDiscover : true,
       apiPassword: insertDevice.apiPassword || null,
@@ -58,27 +60,15 @@ var MemStorage = class {
 };
 var storage = new MemStorage();
 
-// shared/schema.ts
-import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
+// shared/model.ts
 import { z } from "zod";
-var devices = pgTable("devices", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  ip: text("ip").notNull(),
-  port: integer("port").notNull().default(6053),
-  apiPassword: text("api_password"),
-  isOnline: boolean("is_online").default(false),
-  lastSeen: timestamp("last_seen"),
-  deviceType: text("device_type").default("unknown"),
-  autoDiscover: boolean("auto_discover").default(true),
-  createdAt: timestamp("created_at").defaultNow()
-});
-var insertDeviceSchema = createInsertSchema(devices).omit({
-  id: true,
-  isOnline: true,
-  lastSeen: true,
-  createdAt: true
+var insertDeviceSchema = z.object({
+  name: z.string(),
+  ip: z.string(),
+  port: z.number().min(1).max(65535).default(80),
+  apiPassword: z.string().optional().nullable(),
+  deviceType: z.string().default("unknown"),
+  autoDiscover: z.boolean().default(true)
 });
 var updateDeviceSchema = insertDeviceSchema.partial();
 var deviceCommandSchema = z.object({
@@ -89,11 +79,12 @@ var deviceCommandSchema = z.object({
 
 // server/routes.ts
 import { z as z2 } from "zod";
+var { Client: ESPHomeClient } = esphomeApi;
 async function registerRoutes(app2) {
   app2.get("/api/devices", async (req, res) => {
     try {
-      const devices2 = await storage.getDevices();
-      res.json(devices2);
+      const devices = await storage.getDevices();
+      res.json(devices);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch devices" });
     }
@@ -117,7 +108,15 @@ async function registerRoutes(app2) {
       if (existing) {
         return res.status(400).json({ message: "Device with this IP already exists" });
       }
-      const device = await storage.createDevice(deviceData);
+      const detectedPort = await detectDevicePort(
+        deviceData.ip,
+        deviceData.port || 80,
+        deviceData.apiPassword || void 0
+      );
+      if (detectedPort === null) {
+        return res.status(400).json({ message: "Device is not reachable" });
+      }
+      const device = await storage.createDevice({ ...deviceData, port: detectedPort });
       res.status(201).json(device);
     } catch (error) {
       if (error instanceof z2.ZodError) {
@@ -157,10 +156,11 @@ async function registerRoutes(app2) {
   app2.post("/api/devices/test-connection", async (req, res) => {
     try {
       const { ip, port, apiPassword } = req.body;
-      const isReachable = await testDeviceConnection(ip, port, apiPassword);
+      const detected = await detectDevicePort(ip, port || 80, apiPassword);
       res.json({
-        success: isReachable,
-        message: isReachable ? "Device is reachable" : "Device is not reachable"
+        success: detected !== null,
+        port: detected,
+        message: detected !== null ? "Device is reachable" : "Device is not reachable"
       });
     } catch (error) {
       res.status(500).json({ message: "Connection test failed" });
@@ -220,46 +220,53 @@ async function registerRoutes(app2) {
   const httpServer = createServer(app2);
   return httpServer;
 }
-async function testDeviceConnection(ip, port, apiPassword) {
-  const ipParts = ip.split(".").map(Number);
-  return ipParts.every((part) => part >= 0 && part <= 255) && port > 0 && port <= 65535;
+async function checkRest(ip) {
+  try {
+    await axios.get(`http://${ip}/status`, { timeout: 3e3 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function checkNative(ip, port, password) {
+  const client = new ESPHomeClient({ host: ip, port, password });
+  try {
+    await client.connect();
+    await client.disconnect();
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function detectDevicePort(ip, port, password) {
+  if (await checkRest(ip)) return 80;
+  if (await checkNative(ip, 6053, password)) return 6053;
+  return null;
 }
 async function scanNetworkForDevices() {
   return [];
 }
 async function sendDeviceCommand(device, command) {
-  return { status: "executed", timestamp: /* @__PURE__ */ new Date() };
+  if (device.port === 80) {
+    await axios.post(`http://${device.ip}/command`, command, { timeout: 5e3 });
+    return { via: "http" };
+  }
+  const client = new ESPHomeClient({ host: device.ip, port: device.port, password: device.apiPassword || void 0 });
+  await client.connect();
+  await client.executeService(command.command, command);
+  await client.disconnect();
+  return { via: "native" };
 }
 async function getDeviceStatus(device) {
-  const mockEntities = [];
-  if (device.deviceType === "light") {
-    mockEntities.push({
-      id: "led_strip",
-      name: "LED Strip",
-      type: "light",
-      state: { on: true, brightness: 85, color: { r: 255, g: 255, b: 255 } }
-    });
-  } else if (device.deviceType === "sensor") {
-    mockEntities.push({
-      id: "temperature",
-      name: "Temperature",
-      type: "sensor",
-      state: { value: 23.5, unit: "\xB0C" }
-    });
-  } else if (device.deviceType === "switch") {
-    mockEntities.push({
-      id: "relay",
-      name: "Relay",
-      type: "switch",
-      state: { on: false }
-    });
+  if (device.port === 80) {
+    const res = await axios.get(`http://${device.ip}/status`, { timeout: 5e3 });
+    return res.data;
   }
-  return {
-    online: true,
-    uptime: "2h 34m",
-    signalStrength: "-45 dBm",
-    entities: mockEntities
-  };
+  const client = new ESPHomeClient({ host: device.ip, port: device.port, password: device.apiPassword || void 0 });
+  await client.connect();
+  const status = await client.getStatus();
+  await client.disconnect();
+  return status;
 }
 
 // server/vite.ts
