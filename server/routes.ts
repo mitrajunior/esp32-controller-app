@@ -3,6 +3,9 @@ import { createServer, type Server } from "http";
 import axios from "axios";
 import esphomeApi from "esphome-native-api";
 import { lookup } from "node:dns/promises";
+import mdns from "multicast-dns";
+import { networkInterfaces } from "node:os";
+import net, { Socket } from "node:net";
 
 const { Client: ESPHomeClient, Connection: ESPHomeConnection } = esphomeApi as any;
 import { storage } from "./storage";
