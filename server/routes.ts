@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import axios from "axios";
 import esphomeApi from "esphome-native-api";
 import { lookup } from "node:dns/promises";
+import { Socket } from "node:net";
 const { Client: ESPHomeClient, Connection: ESPHomeConnection } = esphomeApi as any;
 import { storage } from "./storage";
 import { insertDeviceSchema, updateDeviceSchema, deviceCommandSchema } from "@shared/model";
@@ -286,6 +287,31 @@ async function checkNative(ip: string, port: number, password?: string): Promise
   });
 }
 
+async function checkSocket(ip: string, port: number): Promise<boolean> {
+  const host = await resolveHost(ip);
+  return new Promise((resolve) => {
+    const socket = new Socket();
+    const timer = setTimeout(() => {
+      socket.destroy();
+      resolve(false);
+    }, 3000);
+
+    socket.once('connect', () => {
+      clearTimeout(timer);
+      socket.end();
+      resolve(true);
+    });
+
+    socket.once('error', () => {
+      clearTimeout(timer);
+      socket.destroy();
+      resolve(false);
+    });
+
+    socket.connect(port, host);
+  });
+}
+
 async function detectDevicePort(ip: string, port: number, password?: string): Promise<number | null> {
   // first try the provided port using REST
   if (await checkRest(ip, port)) return port;
@@ -301,8 +327,13 @@ async function detectDevicePort(ip: string, port: number, password?: string): Pr
 }
 
 async function testDeviceConnection(ip: string, port: number, apiPassword?: string): Promise<boolean> {
-  const detected = await detectDevicePort(ip, port, apiPassword);
-  return detected !== null;
+  // first try a short ESPHome handshake using the provided credentials
+  if (await checkNative(ip, port, apiPassword)) {
+    return true;
+  }
+
+  // fallback to a simple TCP socket check for devices without the native API
+  return await checkSocket(ip, port);
 }
 
 async function scanNetworkForDevices() {
