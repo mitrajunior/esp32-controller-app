@@ -8,9 +8,10 @@ export default function NotFound() {
         <CardContent className="pt-6">
           <div className="flex mb-4 gap-2">
             <AlertCircle className="h-8 w-8 text-red-500" />
-
-            Did you forget to add the page to the router?
-          </p>
+            <p>
+              Did you forget to add the page to the router?
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>
