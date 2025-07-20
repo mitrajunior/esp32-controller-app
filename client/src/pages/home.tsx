@@ -7,7 +7,7 @@ import DeviceDiscovery from "@/components/device-discovery";
 import DeviceList from "@/components/device-list";
 import DeviceControlModal from "@/components/device-control-modal";
 import AddDeviceModal from "@/components/add-device-modal";
-import type { Device } from "@shared/schema";
+import type { Device } from "@shared/model";
 
 export default function Home() {
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);

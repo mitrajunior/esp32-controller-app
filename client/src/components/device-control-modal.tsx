@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
-import type { Device, DeviceStatus, DeviceCommand } from "@shared/schema";
+import type { Device, DeviceStatus, DeviceCommand } from "@shared/model";
 import { apiRequest } from "@/lib/queryClient";
 
 interface DeviceControlModalProps {
