@@ -3,9 +3,7 @@ import { createServer, type Server } from "http";
 import axios from "axios";
 import esphomeApi from "esphome-native-api";
 import { lookup } from "node:dns/promises";
-import { networkInterfaces } from "node:os";
-import * as net from "node:net";
-import mdns from "multicast-dns";
+
 const { Client: ESPHomeClient, Connection: ESPHomeConnection } = esphomeApi as any;
 import { storage } from "./storage";
 import { insertDeviceSchema, updateDeviceSchema, deviceCommandSchema } from "@shared/model";
@@ -197,6 +195,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid command data", errors: error.errors });
       }
+      if ((error as any)?.message === 'Unsupported command') {
+        return res.status(400).json({ message: 'Unsupported command' });
+      }
       res.status(500).json({ message: "Failed to execute command" });
     }
   });
@@ -289,6 +290,31 @@ async function checkNative(ip: string, port: number, password?: string): Promise
   });
 }
 
+async function checkSocket(ip: string, port: number): Promise<boolean> {
+  const host = await resolveHost(ip);
+  return new Promise((resolve) => {
+    const socket = new Socket();
+    const timer = setTimeout(() => {
+      socket.destroy();
+      resolve(false);
+    }, 3000);
+
+    socket.once('connect', () => {
+      clearTimeout(timer);
+      socket.end();
+      resolve(true);
+    });
+
+    socket.once('error', () => {
+      clearTimeout(timer);
+      socket.destroy();
+      resolve(false);
+    });
+
+    socket.connect(port, host);
+  });
+}
+
 async function detectDevicePort(ip: string, port: number, password?: string): Promise<number | null> {
   // first try the provided port using REST
   if (await checkRest(ip, port)) return port;
@@ -304,8 +330,13 @@ async function detectDevicePort(ip: string, port: number, password?: string): Pr
 }
 
 async function testDeviceConnection(ip: string, port: number, apiPassword?: string): Promise<boolean> {
-  const detected = await detectDevicePort(ip, port, apiPassword);
-  return detected !== null;
+  // first try a short ESPHome handshake using the provided credentials
+  if (await checkNative(ip, port, apiPassword)) {
+    return true;
+  }
+
+  // fallback to a simple TCP socket check for devices without the native API
+  return await checkSocket(ip, port);
 }
 
 async function scanNetworkForDevices() {
@@ -463,6 +494,12 @@ async function executeNativeCommand(client: any, command: any): Promise<void> {
       break;
     case 'set_effect':
       await client.lightCommandService({ key: Number(command.entityId), effect: command.value.effect });
+      break;
+    case 'restart':
+      await client.rebootService();
+      break;
+    case 'factory_reset':
+      await client.factoryResetService();
       break;
     default:
       throw new Error('Unsupported command');
