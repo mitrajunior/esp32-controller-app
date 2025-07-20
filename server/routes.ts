@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import axios from "axios";
 import esphomeApi from "esphome-native-api";
 import { lookup } from "node:dns/promises";
-import { Socket } from "node:net";
+
 const { Client: ESPHomeClient, Connection: ESPHomeConnection } = esphomeApi as any;
 import { storage } from "./storage";
 import { insertDeviceSchema, updateDeviceSchema, deviceCommandSchema } from "@shared/model";
@@ -340,8 +340,87 @@ async function testDeviceConnection(ip: string, port: number, apiPassword?: stri
 }
 
 async function scanNetworkForDevices() {
-  // Discovery not implemented
-  return [] as any[];
+  const results: { name: string; ip: string; port: number }[] = [];
+
+  try {
+    const mdnsBrowser = mdns();
+    const devices = new Map<string, { name: string; ip: string; port: number }>();
+
+    const handle = (packet: any) => {
+      let ptr: any = packet.answers.find((a: any) => a.type === 'PTR' && a.name === '_esphomelib._tcp.local');
+      if (!ptr) return;
+
+      const srv = packet.additionals.find((a: any) => a.type === 'SRV' && a.name === ptr.data);
+      const aRec = packet.additionals.find((a: any) => a.type === 'A' && srv && a.name === srv.data.target);
+      if (srv && aRec) {
+        devices.set(aRec.data, {
+          name: ptr.data.replace('._esphomelib._tcp.local', ''),
+          ip: aRec.data,
+          port: srv.data.port,
+        });
+      }
+    };
+
+    mdnsBrowser.on('response', handle);
+    mdnsBrowser.query({ questions: [{ name: '_esphomelib._tcp.local', type: 'PTR' }] });
+
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    mdnsBrowser.removeListener('response', handle);
+    mdnsBrowser.destroy();
+
+    results.push(...Array.from(devices.values()));
+  } catch (_err) {
+    // ignore mDNS errors
+  }
+
+  if (results.length > 0) {
+    return results;
+  }
+
+  // fallback IP range scan for port 6053
+  const nets = networkInterfaces();
+  const prefixes = new Set<string>();
+  for (const ifaces of Object.values(nets)) {
+    if (!ifaces) continue;
+    for (const iface of ifaces) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        const parts = iface.address.split('.');
+        if (parts.length === 4) {
+          prefixes.add(parts.slice(0, 3).join('.'));
+        }
+      }
+    }
+  }
+
+  if (prefixes.size === 0) {
+    prefixes.add('192.168.0');
+    prefixes.add('192.168.1');
+  }
+
+  const checked = new Set<string>();
+  await Promise.all(
+    Array.from(prefixes).flatMap((base) =>
+      Array.from({ length: 254 }, (_, i) => {
+        const ip = `${base}.${i + 1}`;
+        if (checked.has(ip)) return Promise.resolve();
+        checked.add(ip);
+        return new Promise<void>((resolve) => {
+          const socket = net.createConnection({ host: ip, port: 6053, timeout: 500 }, () => {
+            results.push({ name: ip, ip, port: 6053 });
+            socket.end();
+            resolve();
+          });
+          socket.on('error', () => resolve());
+          socket.on('timeout', () => {
+            socket.destroy();
+            resolve();
+          });
+        });
+      })
+    )
+  );
+
+  return results;
 }
 
 async function sendDeviceCommand(device: any, command: any): Promise<any> {
