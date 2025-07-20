@@ -79,7 +79,7 @@ var deviceCommandSchema = z.object({
 
 // server/routes.ts
 import { z as z2 } from "zod";
-var { Client: ESPHomeClient } = esphomeApi;
+
 async function registerRoutes(app2) {
   app2.get("/api/devices", async (req, res) => {
     try {
@@ -220,27 +220,14 @@ async function registerRoutes(app2) {
   const httpServer = createServer(app2);
   return httpServer;
 }
-async function checkRest(ip) {
-  try {
-    await axios.get(`http://${ip}/status`, { timeout: 3e3 });
+
     return true;
   } catch {
     return false;
   }
 }
 async function checkNative(ip, port, password) {
-  const client = new ESPHomeClient({ host: ip, port, password });
-  try {
-    await client.connect();
-    await client.disconnect();
-    return true;
-  } catch {
-    return false;
-  }
-}
-async function detectDevicePort(ip, port, password) {
-  if (await checkRest(ip)) return 80;
-  if (await checkNative(ip, 6053, password)) return 6053;
+
   return null;
 }
 async function scanNetworkForDevices() {
@@ -248,25 +235,12 @@ async function scanNetworkForDevices() {
 }
 async function sendDeviceCommand(device, command) {
   if (device.port === 80) {
-    await axios.post(`http://${device.ip}/command`, command, { timeout: 5e3 });
-    return { via: "http" };
-  }
-  const client = new ESPHomeClient({ host: device.ip, port: device.port, password: device.apiPassword || void 0 });
-  await client.connect();
-  await client.executeService(command.command, command);
-  await client.disconnect();
+
   return { via: "native" };
 }
 async function getDeviceStatus(device) {
   if (device.port === 80) {
-    const res = await axios.get(`http://${device.ip}/status`, { timeout: 5e3 });
-    return res.data;
-  }
-  const client = new ESPHomeClient({ host: device.ip, port: device.port, password: device.apiPassword || void 0 });
-  await client.connect();
-  const status = await client.getStatus();
-  await client.disconnect();
-  return status;
+
 }
 
 // server/vite.ts

@@ -190,9 +190,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 }
 
 // Utility functions
-async function checkRest(ip: string): Promise<boolean> {
-  try {
-    await axios.get(`http://${ip}/status`, { timeout: 3000 });
+
     return true;
   } catch {
     return false;
@@ -200,19 +198,7 @@ async function checkRest(ip: string): Promise<boolean> {
 }
 
 async function checkNative(ip: string, port: number, password?: string): Promise<boolean> {
-  const client = new ESPHomeClient({ host: ip, port, password });
-  try {
-    await client.connect();
-    await client.disconnect();
-    return true;
-  } catch {
-    return false;
-  }
-}
 
-async function detectDevicePort(ip: string, port: number, password?: string): Promise<number | null> {
-  if (await checkRest(ip)) return 80;
-  if (await checkNative(ip, 6053, password)) return 6053;
   return null;
 }
 
@@ -228,27 +214,11 @@ async function scanNetworkForDevices() {
 
 async function sendDeviceCommand(device: any, command: any): Promise<any> {
   if (device.port === 80) {
-    await axios.post(`http://${device.ip}/command`, command, { timeout: 5000 });
-    return { via: 'http' };
-  }
 
-  const client = new ESPHomeClient({ host: device.ip, port: device.port, password: device.apiPassword || undefined });
-  await client.connect();
-  // send generic service command
-  await client.executeService(command.command, command);
-  await client.disconnect();
   return { via: 'native' };
 }
 
 async function getDeviceStatus(device: any): Promise<any> {
   if (device.port === 80) {
-    const res = await axios.get(`http://${device.ip}/status`, { timeout: 5000 });
-    return res.data;
-  }
 
-  const client = new ESPHomeClient({ host: device.ip, port: device.port, password: device.apiPassword || undefined });
-  await client.connect();
-  const status = await client.getStatus();
-  await client.disconnect();
-  return status;
 }
