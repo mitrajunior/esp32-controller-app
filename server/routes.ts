@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import axios from "axios";
 import esphomeApi from "esphome-native-api";
 import { lookup } from "node:dns/promises";
+import { Socket } from "net";
 const { Client: ESPHomeClient, Connection: ESPHomeConnection } = esphomeApi as any;
 import { storage } from "./storage";
 import { insertDeviceSchema, updateDeviceSchema, deviceCommandSchema } from "@shared/model";
@@ -30,7 +31,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const reachable = await testDeviceConnection(
             d.ip,
             d.port,
-            d.apiPassword || undefined,
           );
           await storage.updateDeviceStatus(d.ip, reachable);
         }),
@@ -70,7 +70,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const detectedPort = await detectDevicePort(
         deviceData.ip,
         deviceData.port || 80,
-        deviceData.apiPassword || undefined,
       );
 
       if (detectedPort === null) {
@@ -79,7 +78,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const device = await storage.createDevice({ ...deviceData, port: detectedPort });
 
-      const online = await testDeviceConnection(device.ip, device.port, device.apiPassword || undefined);
+      const online = await testDeviceConnection(device.ip, device.port);
       await storage.updateDeviceStatus(device.ip, online);
 
       res.status(201).json(await storage.getDevice(device.id));
@@ -105,7 +104,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const online = await testDeviceConnection(
         device.ip,
         device.port,
-        device.apiPassword || undefined,
       );
       await storage.updateDeviceStatus(device.ip, online);
 
@@ -137,7 +135,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { ip, port, apiPassword } = req.body;
 
-      const detected = await detectDevicePort(ip, port || 80, apiPassword);
+      const detected = await detectDevicePort(ip, port || 80);
 
       res.json({
         success: detected !== null,
@@ -235,73 +233,46 @@ async function checkRest(ip: string, port: number): Promise<boolean> {
   }
 }
 
-async function checkNative(ip: string, port: number, password?: string): Promise<boolean> {
+async function checkNative(ip: string, port: number): Promise<boolean> {
   return new Promise(async (resolve) => {
     const host = await resolveHost(ip);
-    const client = new ESPHomeClient({
-      host,
-      port,
-      password: password || "",
-      reconnect: false,
-      clearSession: true,
-      initializeDeviceInfo: false,
-      initializeListEntities: false,
-      initializeSubscribeStates: false,
-      initializeSubscribeLogs: false,
-    });
-
-    const cleanup = () => {
-      client.removeAllListeners();
-      try {
-        client.disconnect();
-      } catch (_err) {
-        /* ignore */
-      }
-    };
+    const socket = new Socket();
 
     const timer = setTimeout(() => {
-      cleanup();
+      socket.destroy();
       resolve(false);
-    }, 5000);
+    }, 3000);
 
-    client.once("connected", () => {
+    socket.once("error", () => {
       clearTimeout(timer);
-      cleanup();
+      socket.destroy();
+      resolve(false);
+    });
+
+    socket.connect(port, host, () => {
+      clearTimeout(timer);
+      socket.end();
       resolve(true);
     });
-
-    client.once("error", () => {
-      clearTimeout(timer);
-      cleanup();
-      resolve(false);
-    });
-
-    try {
-      client.connect();
-    } catch (_err) {
-      clearTimeout(timer);
-      cleanup();
-      resolve(false);
-    }
   });
 }
 
-async function detectDevicePort(ip: string, port: number, password?: string): Promise<number | null> {
+async function detectDevicePort(ip: string, port: number): Promise<number | null> {
   // first try the provided port using REST
   if (await checkRest(ip, port)) return port;
 
   // if not accessible via REST, try native API (default 6053)
-  if (await checkNative(ip, port, password)) return port;
+  if (await checkNative(ip, port)) return port;
 
   // fallback to common defaults
   if (port !== 80 && await checkRest(ip, 80)) return 80;
-  if (port !== 6053 && await checkNative(ip, 6053, password)) return 6053;
+  if (port !== 6053 && await checkNative(ip, 6053)) return 6053;
 
   return null;
 }
 
-async function testDeviceConnection(ip: string, port: number, apiPassword?: string): Promise<boolean> {
-  const detected = await detectDevicePort(ip, port, apiPassword);
+async function testDeviceConnection(ip: string, port: number): Promise<boolean> {
+  const detected = await detectDevicePort(ip, port);
   return detected !== null;
 }
 
@@ -393,6 +364,6 @@ async function getDeviceStatus(device: any): Promise<any> {
     return res.data;
   }
 
-  const reachable = await checkNative(device.ip, device.port, device.apiPassword || undefined);
+  const reachable = await checkNative(device.ip, device.port);
   return { online: reachable };
 }
