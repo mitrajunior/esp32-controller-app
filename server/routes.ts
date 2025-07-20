@@ -23,7 +23,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/devices", async (req, res) => {
     try {
       const devices = await storage.getDevices();
-      res.json(devices);
+
+      // Refresh connection status for each device on every listing
+      await Promise.all(
+        devices.map(async (d) => {
+          const reachable = await testDeviceConnection(
+            d.ip,
+            d.port,
+            d.apiPassword || undefined,
+          );
+          await storage.updateDeviceStatus(d.ip, reachable);
+        }),
+      );
+
+      res.json(await storage.getDevices());
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch devices" });
     }
@@ -65,7 +78,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const device = await storage.createDevice({ ...deviceData, port: detectedPort });
-      res.status(201).json(device);
+
+      const online = await testDeviceConnection(device.ip, device.port, device.apiPassword || undefined);
+      await storage.updateDeviceStatus(device.ip, online);
+
+      res.status(201).json(await storage.getDevice(device.id));
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid device data", errors: error.errors });
@@ -84,8 +101,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!device) {
         return res.status(404).json({ message: "Device not found" });
       }
-      
-      res.json(device);
+
+      const online = await testDeviceConnection(
+        device.ip,
+        device.port,
+        device.apiPassword || undefined,
+      );
+      await storage.updateDeviceStatus(device.ip, online);
+
+      res.json(await storage.getDevice(device.id));
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid update data", errors: error.errors });
