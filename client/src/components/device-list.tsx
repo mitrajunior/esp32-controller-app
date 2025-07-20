@@ -211,9 +211,7 @@ export default function DeviceList({
                   onClick={() => onDeviceControl(device)}
                   disabled={!device.isOnline}
                   className={`touch-target font-medium ${
-                    device.isOnline 
-                      ? 'btn-status-neutral' 
-                      : 'bg-gray-600 text-gray-200 cursor-not-allowed'
+
                   }`}
                 >
                   <Settings className="w-4 h-4 mr-2" />

@@ -78,8 +78,6 @@ var deviceCommandSchema = z.object({
   value: z.any().optional()
 });
 
-// server/routes.ts
-import { z as z2 } from "zod";
 
 async function registerRoutes(app2) {
   app2.get("/api/devices", async (req, res) => {
@@ -222,13 +220,8 @@ async function registerRoutes(app2) {
   return httpServer;
 }
 
-    return false;
-  }
-}
 async function checkNative(ip, port, password) {
 
-  return null;
-}
 async function scanNetworkForDevices() {
   return [];
 }
