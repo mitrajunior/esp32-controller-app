@@ -1,0 +1,190 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(0, 0%, 100%);
+  --foreground: hsl(20, 14.3%, 4.1%);
+  --muted: hsl(60, 4.8%, 95.9%);
+  --muted-foreground: hsl(25, 5.3%, 44.7%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(20, 14.3%, 4.1%);
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(20, 14.3%, 4.1%);
+  --border: hsl(20, 5.9%, 90%);
+  --input: hsl(20, 5.9%, 90%);
+  --primary: hsl(195, 100%, 50%);
+  --primary-foreground: hsl(210, 100%, 11%);
+  --secondary: hsl(60, 4.8%, 95.9%);
+  --secondary-foreground: hsl(24, 9.8%, 10%);
+  --accent: hsl(60, 4.8%, 95.9%);
+  --accent-foreground: hsl(24, 9.8%, 10%);
+  --destructive: hsl(0, 100%, 50%);
+  --destructive-foreground: hsl(60, 9.1%, 97.8%);
+  --ring: hsl(20, 14.3%, 4.1%);
+  --radius: 0.5rem;
+  
+  /* OLED Theme Colors */
+  --oled: hsl(0, 0%, 0%);
+  --surface: hsl(0, 0%, 10%);
+  --surface-elevated: hsl(0, 0%, 18%);
+  --status-on: hsl(120, 100%, 50%);
+  --status-off: hsl(0, 100%, 50%);
+  --status-neutral: hsl(195, 100%, 50%);
+  --text-secondary: hsl(0, 0%, 70%);
+}
+
+.dark {
+  --background: hsl(0, 0%, 0%);
+  --foreground: hsl(0, 0%, 100%);
+  --muted: hsl(0, 0%, 10%);
+  --muted-foreground: hsl(0, 0%, 70%);
+  --popover: hsl(0, 0%, 10%);
+  --popover-foreground: hsl(0, 0%, 100%);
+  --card: hsl(0, 0%, 10%);
+  --card-foreground: hsl(0, 0%, 100%);
+  --border: hsl(0, 0%, 18%);
+  --input: hsl(0, 0%, 18%);
+  --primary: hsl(195, 100%, 50%);
+  --primary-foreground: hsl(210, 100%, 11%);
+  --secondary: hsl(0, 0%, 18%);
+  --secondary-foreground: hsl(0, 0%, 100%);
+  --accent: hsl(0, 0%, 18%);
+  --accent-foreground: hsl(0, 0%, 100%);
+  --destructive: hsl(0, 100%, 50%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --ring: hsl(0, 0%, 83%);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply dark;
+  }
+
+  body {
+    @apply font-sans antialiased;
+    @apply bg-black text-white;
+    min-height: 100vh;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Custom scrollbars for OLED theme */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-surface;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-surface-elevated rounded-lg;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--text-secondary);
+  }
+}
+
+@layer components {
+  .btn-status-on {
+    background-color: var(--status-on);
+    color: black;
+  }
+  
+  .btn-status-off {
+    background-color: var(--status-off);
+    color: white;
+  }
+  
+  .btn-status-neutral {
+    background-color: var(--status-neutral);
+    color: black;
+  }
+  
+  .surface {
+    background-color: var(--surface);
+  }
+  
+  .surface-elevated {
+    background-color: var(--surface-elevated);
+  }
+  
+  .text-secondary {
+    color: var(--text-secondary);
+  }
+
+  /* Custom slider styling for OLED theme */
+  .slider {
+    @apply appearance-none bg-surface rounded-lg cursor-pointer;
+    height: 8px;
+  }
+
+  .slider::-webkit-slider-thumb {
+    @apply appearance-none w-5 h-5 rounded-full cursor-pointer;
+    background-color: var(--status-neutral);
+  }
+
+  .slider::-moz-range-thumb {
+    @apply w-5 h-5 rounded-full cursor-pointer border-0;
+    background-color: var(--status-neutral);
+  }
+}
+
+@layer utilities {
+  /* Touch-friendly focus states */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Loading animation */
+  .animate-pulse-slow {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* OLED specific utilities */
+  .bg-oled {
+    background-color: var(--oled);
+  }
+  
+  .bg-surface {
+    background-color: var(--surface);
+  }
+  
+  .bg-surface-elevated {
+    background-color: var(--surface-elevated);
+  }
+  
+  .text-status-on {
+    color: var(--status-on);
+  }
+  
+  .text-status-off {
+    color: var(--status-off);
+  }
+  
+  .text-status-neutral {
+    color: var(--status-neutral);
+  }
+  
+  .text-secondary {
+    color: var(--text-secondary);
+  }
+  
+  .border-status-on {
+    border-color: var(--status-on);
+  }
+  
+  .border-status-off {
+    border-color: var(--status-off);
+  }
+  
+  .border-status-neutral {
+    border-color: var(--status-neutral);
+  }
+}

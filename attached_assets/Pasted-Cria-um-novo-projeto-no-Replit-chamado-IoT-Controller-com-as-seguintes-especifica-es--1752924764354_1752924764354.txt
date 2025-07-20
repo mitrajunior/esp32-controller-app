@@ -1,0 +1,99 @@
+Cria um novo projeto no Replit chamado "IoT Controller" com as seguintes especificações:
+
+---
+
+## 📦 Estrutura do Projeto
+iot-controller/
+├── backend/
+│ ├── server.js
+│ ├── package.json
+│
+├── frontend/
+│ ├── src/
+│ │ ├── App.jsx
+│ │ ├── index.jsx
+│ ├── package.json
+│
+├── .replit
+├── replit.nix (opcional, se necessário para dependências)
+├── README.md
+
+markdown
+Copiar
+Editar
+
+---
+
+## 🖤 Frontend (React.js + TailwindCSS)
+- **Framework:** React.js (com Vite para build rápido)
+- **Estilo:** Dark Mode OLED (background #000000, texto #FFFFFF)
+- **Acentos:** Verde (#00FF00) para ON, Vermelho (#FF0000) para OFF, Azul (#00BFFF) para neutros
+- **Funcionalidades:**
+  1. Página inicial:
+     - Lista dispositivos ESPHome detetados automaticamente (Nome, IP, Estado)
+     - Botão “Abrir Controlo” para cada dispositivo
+     - Campo para adicionar dispositivo manualmente por IP
+     - Botão “Forçar Scan da Rede” para atualizar lista
+  2. Página de controlo individual:
+     - Nome + IP + estado online
+     - Botões dinâmicos para funções do ESPHome (LED ON/OFF, Relés, etc.)
+  3. Toast notifications (sucesso/erro) ao enviar comandos
+  4. Responsivo e mobile-friendly
+
+---
+
+## 🚀 Backend (Node.js + Express)
+- Serve:
+  - API REST para o frontend
+  - Frontend buildado (em produção) na mesma porta
+- Descoberta automática de ESPHome:
+  - Tenta mDNS (Bonjour) para `_esphomelib._tcp.local.`
+  - Fallback: Scan IP (192.168.1.1–254) e testa porta 6053
+- Comunica com dispositivos ESPHome via API nativa (porta 6053) usando `@esphome/api`
+- API Endpoints:
+  - `GET /api/devices`: lista dispositivos detetados
+  - `POST /api/add-device`: adiciona ESPHome manualmente por IP
+  - `POST /api/device/:ip/:action`: envia comando direto ao ESPHome
+- Escuta em `0.0.0.0` para ser acessível na rede local
+
+---
+
+## ⚡ Configuração no Replit
+- Instala automaticamente dependências do backend e frontend com `npm install`
+- Builda o frontend (React) com `npm run build`
+- Express serve o frontend buildado na mesma porta
+- Define no `.replit`:
+run = "npm run start"
+
+pgsql
+Copiar
+Editar
+
+**Scripts npm no package.json (raiz):**
+"scripts": {
+"start": "node backend/server.js",
+"client": "cd frontend && npm run dev",
+"build": "cd frontend && npm run build",
+"install": "cd frontend && npm install && cd ../backend && npm install"
+}
+
+yaml
+Copiar
+Editar
+
+---
+
+## 💥 Resultado esperado
+- Projeto corre diretamente no Replit:
+  - Abre a URL pública gerada pelo Replit
+  - Lista ESPHome em tempo real
+  - Controlo multi-dispositivo direto via API nativa (porta 6053)
+- Suporte a redes locais quando o Replit é exposto
+
+---
+
+## 🎯 Requisitos técnicos
+- Node.js >= 18.x
+- React.js + Vite + TailwindCSS
+- @esphome/api para API ESPHome nativa
+- Backend + Frontend juntos num único servidor Express
