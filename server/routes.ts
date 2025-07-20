@@ -194,6 +194,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid command data", errors: error.errors });
       }
+      if ((error as any)?.message === 'Unsupported command') {
+        return res.status(400).json({ message: 'Unsupported command' });
+      }
       res.status(500).json({ message: "Failed to execute command" });
     }
   });
@@ -381,6 +384,12 @@ async function executeNativeCommand(client: any, command: any): Promise<void> {
       break;
     case 'set_effect':
       await client.lightCommandService({ key: Number(command.entityId), effect: command.value.effect });
+      break;
+    case 'restart':
+      await client.rebootService();
+      break;
+    case 'factory_reset':
+      await client.factoryResetService();
       break;
     default:
       throw new Error('Unsupported command');
