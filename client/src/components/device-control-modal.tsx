@@ -182,7 +182,7 @@ export default function DeviceControlModal({
                 <div className="font-medium">{(deviceStatus as any)?.signalStrength || 'Unknown'}</div>
               </div>
               <div>
-                <div className="text-sm text-secondary mb-1">IP Address</div>
+                <div className="text-sm text-secondary mb-1">IP / Hostname</div>
                 <div className="font-medium">{device.ip}</div>
               </div>
             </div>
