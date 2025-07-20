@@ -1,8 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import axios from "axios";
-import esphomeApi from "esphome-native-api";
-const { Client: ESPHomeClient, Connection: ESPHomeConnection } = esphomeApi as any;
+
 import { storage } from "./storage";
 import { insertDeviceSchema, updateDeviceSchema, deviceCommandSchema } from "@shared/model";
 import { z } from "zod";
@@ -191,9 +190,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 }
 
 // Utility functions
-async function checkRest(ip: string, port: number): Promise<boolean> {
-  try {
-    await axios.get(`http://${ip}:${port}/status`, { timeout: 3000 });
+
     return true;
   } catch {
     return false;
@@ -201,61 +198,6 @@ async function checkRest(ip: string, port: number): Promise<boolean> {
 }
 
 async function checkNative(ip: string, port: number, password?: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const client = new ESPHomeClient({
-      host: ip,
-      port,
-      password: password || "",
-      reconnect: false,
-      clearSession: true,
-      initializeDeviceInfo: false,
-      initializeListEntities: false,
-      initializeSubscribeStates: false,
-      initializeSubscribeLogs: false,
-    });
-
-    const cleanup = () => {
-      client.removeAllListeners();
-      try { client.disconnect(); } catch {}
-    };
-
-    const timer = setTimeout(() => {
-      cleanup();
-      resolve(false);
-    }, 5000);
-
-    client.once("connected", () => {
-      clearTimeout(timer);
-      cleanup();
-      resolve(true);
-    });
-
-    client.once("error", () => {
-      clearTimeout(timer);
-      cleanup();
-      resolve(false);
-    });
-
-    try {
-      client.connect();
-    } catch {
-      clearTimeout(timer);
-      cleanup();
-      resolve(false);
-    }
-  });
-}
-
-async function detectDevicePort(ip: string, port: number, password?: string): Promise<number | null> {
-  // first try the provided port using REST
-  if (await checkRest(ip, port)) return port;
-
-  // if not accessible via REST, try native API (default 6053)
-  if (await checkNative(ip, port, password)) return port;
-
-  // fallback to common defaults
-  if (port !== 80 && await checkRest(ip, 80)) return 80;
-  if (port !== 6053 && await checkNative(ip, 6053, password)) return 6053;
 
   return null;
 }
@@ -272,21 +214,11 @@ async function scanNetworkForDevices() {
 
 async function sendDeviceCommand(device: any, command: any): Promise<any> {
   if (device.port === 80) {
-    await axios.post(`http://${device.ip}:${device.port}/command`, command, { timeout: 5000 });
-    return { via: 'http' };
-  }
 
-  await checkNative(device.ip, device.port, device.apiPassword || undefined);
-  // TODO: implement actual command execution using native API
   return { via: 'native' };
 }
 
 async function getDeviceStatus(device: any): Promise<any> {
   if (device.port === 80) {
-    const res = await axios.get(`http://${device.ip}:${device.port}/status`, { timeout: 5000 });
-    return res.data;
-  }
 
-  const reachable = await checkNative(device.ip, device.port, device.apiPassword || undefined);
-  return { online: reachable };
 }
