@@ -10,7 +10,7 @@ async function resolveHost(host: string): Promise<string> {
   try {
     const res = await lookup(host);
     return res.address;
-  } catch {
+
     return host;
   }
 }
@@ -198,9 +198,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   return httpServer;
 }
 
-
-
-async function checkNative(ip: string, port: number, password?: string): Promise<boolean> {
 
 
   return null;

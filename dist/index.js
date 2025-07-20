@@ -6,6 +6,7 @@ import { createServer } from "http";
 import axios from "axios";
 import esphomeApi from "esphome-native-api";
 
+
 // server/storage.ts
 var MemStorage = class {
   devices;
@@ -221,8 +222,6 @@ async function registerRoutes(app2) {
   return httpServer;
 }
 
-    return true;
-  } catch {
     return false;
   }
 }
@@ -234,11 +233,6 @@ async function scanNetworkForDevices() {
   return [];
 }
 async function sendDeviceCommand(device, command) {
-  if (device.port === 80) {
-
-  return { via: "native" };
-}
-async function getDeviceStatus(device) {
   if (device.port === 80) {
 
 }
