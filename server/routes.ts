@@ -1,8 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import axios from "axios";
-import esphomeApi from "esphome-native-api";
-const { Client: ESPHomeClient } = esphomeApi as any;
+
 import { storage } from "./storage";
 import { insertDeviceSchema, updateDeviceSchema, deviceCommandSchema } from "@shared/model";
 import { z } from "zod";
