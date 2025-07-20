@@ -68,3 +68,4 @@ ifconfig | grep inet
 - Adicione seus dispositivos ESPHome reais através da interface
 - Configure o servidor ESPHome nas configurações
 - O tema OLED otimiza o uso de bateria em telas OLED
+- Antes de fazer o deploy, execute `npm run build` para gerar a pasta `dist/`.
