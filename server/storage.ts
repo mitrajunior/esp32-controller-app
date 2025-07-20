@@ -1,4 +1,4 @@
-import { devices, type Device, type InsertDevice, type UpdateDevice } from "@shared/schema";
+import { type Device, type InsertDevice, type UpdateDevice } from "@shared/model";
 
 export interface IStorage {
   // Device management
@@ -37,7 +37,7 @@ export class MemStorage implements IStorage {
     const device: Device = {
       ...insertDevice,
       id,
-      port: insertDevice.port || 6053,
+      port: insertDevice.port || 80,
       deviceType: insertDevice.deviceType || 'unknown',
       autoDiscover: insertDevice.autoDiscover !== undefined ? insertDevice.autoDiscover : true,
       apiPassword: insertDevice.apiPassword || null,
