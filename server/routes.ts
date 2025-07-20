@@ -198,13 +198,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   return httpServer;
 }
 
-// Utility functions
 
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 async function checkNative(ip: string, port: number, password?: string): Promise<boolean> {
 
