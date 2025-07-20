@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import type { Device } from "@shared/schema";
+import type { Device } from "@shared/model";
 import { 
   Lightbulb, 
   Thermometer, 
@@ -213,7 +213,7 @@ export default function DeviceList({
                   className={`touch-target font-medium ${
                     device.isOnline 
                       ? 'btn-status-neutral' 
-                      : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      : 'bg-gray-600 text-gray-200 cursor-not-allowed'
                   }`}
                 >
                   <Settings className="w-4 h-4 mr-2" />

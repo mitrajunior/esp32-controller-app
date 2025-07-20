@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { insertDeviceSchema, updateDeviceSchema, type Device } from "@shared/schema";
+import { insertDeviceSchema, updateDeviceSchema, type Device } from "@shared/model";
 import { apiRequest } from "@/lib/queryClient";
 import { z } from "zod";
 
@@ -60,7 +60,7 @@ export default function AddDeviceModal({
     defaultValues: {
       name: device?.name || "",
       ip: device?.ip || "",
-      port: device?.port || 6053,
+      port: device?.port || 80,
       apiPassword: device?.apiPassword || "",
       autoDiscover: device?.autoDiscover ?? true,
     },
@@ -214,7 +214,7 @@ export default function AddDeviceModal({
                     />
                   </FormControl>
                   <FormDescription>
-                    Default ESPHome API port is 6053
+                    Default port is 80 for REST or 6053 for native API
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
