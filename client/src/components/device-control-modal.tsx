@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
-import type { Device, DeviceStatus, DeviceCommand } from "@shared/schema";
+import type { Device, DeviceStatus, DeviceCommand } from "@shared/model";
 import { apiRequest } from "@/lib/queryClient";
 
 interface DeviceControlModalProps {
@@ -182,7 +182,7 @@ export default function DeviceControlModal({
                 <div className="font-medium">{(deviceStatus as any)?.signalStrength || 'Unknown'}</div>
               </div>
               <div>
-                <div className="text-sm text-secondary mb-1">IP Address</div>
+                <div className="text-sm text-secondary mb-1">IP / Hostname</div>
                 <div className="font-medium">{device.ip}</div>
               </div>
             </div>
