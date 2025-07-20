@@ -1,7 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import axios from "axios";
-
+import esphomeApi from "esphome-native-api";
+import { lookup } from "node:dns/promises";
+const { Client: ESPHomeClient, Connection: ESPHomeConnection } = esphomeApi as any;
 import { storage } from "./storage";
 import { insertDeviceSchema, updateDeviceSchema, deviceCommandSchema } from "@shared/model";
 import { z } from "zod";
@@ -10,7 +12,7 @@ async function resolveHost(host: string): Promise<string> {
   try {
     const res = await lookup(host);
     return res.address;
-
+  } catch (err) {
     return host;
   }
 }
@@ -21,7 +23,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/devices", async (req, res) => {
     try {
       const devices = await storage.getDevices();
-      res.json(devices);
+
+      // Refresh connection status for each device on every listing
+      await Promise.all(
+        devices.map(async (d) => {
+          const reachable = await testDeviceConnection(
+            d.ip,
+            d.port,
+            d.apiPassword || undefined,
+          );
+          await storage.updateDeviceStatus(d.ip, reachable);
+        }),
+      );
+
+      res.json(await storage.getDevices());
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch devices" });
     }
@@ -63,7 +78,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const device = await storage.createDevice({ ...deviceData, port: detectedPort });
-      res.status(201).json(device);
+
+      const online = await testDeviceConnection(device.ip, device.port, device.apiPassword || undefined);
+      await storage.updateDeviceStatus(device.ip, online);
+
+      res.status(201).json(await storage.getDevice(device.id));
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid device data", errors: error.errors });
@@ -82,8 +101,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!device) {
         return res.status(404).json({ message: "Device not found" });
       }
-      
-      res.json(device);
+
+      const online = await testDeviceConnection(
+        device.ip,
+        device.port,
+        device.apiPassword || undefined,
+      );
+      await storage.updateDeviceStatus(device.ip, online);
+
+      res.json(await storage.getDevice(device.id));
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid update data", errors: error.errors });
@@ -198,7 +224,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
   return httpServer;
 }
 
+// Utility functions
+async function checkRest(ip: string, port: number): Promise<boolean> {
+  const host = await resolveHost(ip);
+  try {
+    await axios.get(`http://${host}:${port}/status`, { timeout: 3000 });
+    return true;
+  } catch (_err) {
+    return false;
+  }
+}
 
+async function checkNative(ip: string, port: number, password?: string): Promise<boolean> {
+  return new Promise(async (resolve) => {
+    const host = await resolveHost(ip);
+    const client = new ESPHomeClient({
+      host,
+      port,
+      password: password || "",
+      reconnect: false,
+      clearSession: true,
+      initializeDeviceInfo: false,
+      initializeListEntities: false,
+      initializeSubscribeStates: false,
+      initializeSubscribeLogs: false,
+    });
+
+    const cleanup = () => {
+      client.removeAllListeners();
+      try {
+        client.disconnect();
+      } catch (_err) {
+        /* ignore */
+      }
+    };
+
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve(false);
+    }, 5000);
+
+    client.once("connected", () => {
+      clearTimeout(timer);
+      cleanup();
+      resolve(true);
+    });
+
+    client.once("error", () => {
+      clearTimeout(timer);
+      cleanup();
+      resolve(false);
+    });
+
+    try {
+      client.connect();
+    } catch (_err) {
+      clearTimeout(timer);
+      cleanup();
+      resolve(false);
+    }
+  });
+}
+
+async function detectDevicePort(ip: string, port: number, password?: string): Promise<number | null> {
+  // first try the provided port using REST
+  if (await checkRest(ip, port)) return port;
+
+  // if not accessible via REST, try native API (default 6053)
+  if (await checkNative(ip, port, password)) return port;
+
+  // fallback to common defaults
+  if (port !== 80 && await checkRest(ip, 80)) return 80;
+  if (port !== 6053 && await checkNative(ip, 6053, password)) return 6053;
 
   return null;
 }
@@ -215,5 +312,87 @@ async function scanNetworkForDevices() {
 
 async function sendDeviceCommand(device: any, command: any): Promise<any> {
   if (device.port === 80) {
+    const host = await resolveHost(device.ip);
+    await axios.post(`http://${host}:${device.port}/command`, command, { timeout: 5000 });
+    return { via: 'http' };
+  }
 
+  const host = await resolveHost(device.ip);
+  const client = new ESPHomeClient({
+    host,
+    port: device.port,
+    password: device.apiPassword || "",
+    reconnect: false,
+    clearSession: true,
+    initializeDeviceInfo: false,
+    initializeListEntities: false,
+    initializeSubscribeStates: false,
+    initializeSubscribeLogs: false,
+  });
+
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      client.removeAllListeners();
+      try {
+        client.disconnect();
+      } catch (_err) {
+        /* ignore */
+      }
+    };
+
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('Timeout'));
+    }, 5000);
+
+    client.once('connected', async () => {
+      try {
+        await executeNativeCommand(client, command);
+        clearTimeout(timer);
+        cleanup();
+        resolve({ via: 'native' });
+      } catch (err: any) {
+        clearTimeout(timer);
+        cleanup();
+        reject(err);
+      }
+    });
+
+    client.once('error', (err: any) => {
+      clearTimeout(timer);
+      cleanup();
+      reject(err);
+    });
+
+    client.connect();
+  });
+}
+
+async function executeNativeCommand(client: any, command: any): Promise<void> {
+  switch (command.command) {
+    case 'toggle':
+      await client.switchCommandService({ key: Number(command.entityId), state: command.value.on });
+      break;
+    case 'set_brightness':
+      await client.lightCommandService({ key: Number(command.entityId), brightness: command.value.brightness });
+      break;
+    case 'set_color':
+      await client.lightCommandService({ key: Number(command.entityId), red: command.value.color.r, green: command.value.color.g, blue: command.value.color.b });
+      break;
+    case 'set_effect':
+      await client.lightCommandService({ key: Number(command.entityId), effect: command.value.effect });
+      break;
+    default:
+      throw new Error('Unsupported command');
+  }
+}
+
+async function getDeviceStatus(device: any): Promise<any> {
+  if (device.port === 80) {
+    const res = await axios.get(`http://${device.ip}:${device.port}/status`, { timeout: 5000 });
+    return res.data;
+  }
+
+  const reachable = await checkNative(device.ip, device.port, device.apiPassword || undefined);
+  return { online: reachable };
 }
