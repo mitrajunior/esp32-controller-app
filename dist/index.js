@@ -79,7 +79,7 @@ var deviceCommandSchema = z.object({
 
 // server/routes.ts
 import { z as z2 } from "zod";
-var { Client: ESPHomeClient, Connection: ESPHomeConnection } = esphomeApi;
+
 async function registerRoutes(app2) {
   app2.get("/api/devices", async (req, res) => {
     try {
@@ -220,62 +220,14 @@ async function registerRoutes(app2) {
   const httpServer = createServer(app2);
   return httpServer;
 }
-async function checkRest(ip, port) {
-  try {
-    await axios.get(`http://${ip}:${port}/status`, { timeout: 3e3 });
+
     return true;
   } catch {
     return false;
   }
 }
 async function checkNative(ip, port, password) {
-  return new Promise((resolve) => {
-    const client = new ESPHomeClient({
-      host: ip,
-      port,
-      password: password || "",
-      reconnect: false,
-      clearSession: true,
-      initializeDeviceInfo: false,
-      initializeListEntities: false,
-      initializeSubscribeStates: false,
-      initializeSubscribeLogs: false
-    });
-    const cleanup = () => {
-      client.removeAllListeners();
-      try {
-        client.disconnect();
-      } catch {
-      }
-    };
-    const timer = setTimeout(() => {
-      cleanup();
-      resolve(false);
-    }, 5e3);
-    client.once("connected", () => {
-      clearTimeout(timer);
-      cleanup();
-      resolve(true);
-    });
-    client.once("error", () => {
-      clearTimeout(timer);
-      cleanup();
-      resolve(false);
-    });
-    try {
-      client.connect();
-    } catch {
-      clearTimeout(timer);
-      cleanup();
-      resolve(false);
-    }
-  });
-}
-async function detectDevicePort(ip, port, password) {
-  if (await checkRest(ip, port)) return port;
-  if (await checkNative(ip, port, password)) return port;
-  if (port !== 80 && await checkRest(ip, 80)) return 80;
-  if (port !== 6053 && await checkNative(ip, 6053, password)) return 6053;
+
   return null;
 }
 async function scanNetworkForDevices() {
@@ -283,19 +235,12 @@ async function scanNetworkForDevices() {
 }
 async function sendDeviceCommand(device, command) {
   if (device.port === 80) {
-    await axios.post(`http://${device.ip}:${device.port}/command`, command, { timeout: 5e3 });
-    return { via: "http" };
-  }
-  await checkNative(device.ip, device.port, device.apiPassword || void 0);
+
   return { via: "native" };
 }
 async function getDeviceStatus(device) {
   if (device.port === 80) {
-    const res = await axios.get(`http://${device.ip}:${device.port}/status`, { timeout: 5e3 });
-    return res.data;
-  }
-  const reachable = await checkNative(device.ip, device.port, device.apiPassword || void 0);
-  return { online: reachable };
+
 }
 
 // server/vite.ts
