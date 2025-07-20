@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { insertDeviceSchema, updateDeviceSchema, type Device } from "@shared/schema";
+import { insertDeviceSchema, updateDeviceSchema, type Device } from "@shared/model";
 import { apiRequest } from "@/lib/queryClient";
 import { z } from "zod";
 
@@ -50,17 +50,25 @@ export default function AddDeviceModal({
   const formSchema = isEditing ? updateDeviceSchema : insertDeviceSchema;
   
   const form = useForm({
-    resolver: zodResolver(formSchema.extend({
-      ip: z.string().regex(
-        /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/,
-        "Please enter a valid IP address"
-      ),
-      port: z.coerce.number().min(1).max(65535, "Port must be between 1 and 65535"),
-    })),
+    resolver: zodResolver(
+      formSchema.extend({
+        ip: z
+          .string()
+          .regex(
+            /^((?:[0-9]{1,3}\.){3}[0-9]{1,3}|(?:[a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+)$/,
+            "Please enter a valid IP address or hostname",
+          ),
+        port: z
+          .coerce
+          .number()
+          .min(1)
+          .max(65535, "Port must be between 1 and 65535"),
+      }),
+    ),
     defaultValues: {
       name: device?.name || "",
       ip: device?.ip || "",
-      port: device?.port || 6053,
+      port: device?.port || 80,
       apiPassword: device?.apiPassword || "",
       autoDiscover: device?.autoDiscover ?? true,
     },
@@ -182,16 +190,16 @@ export default function AddDeviceModal({
               name="ip"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>IP Address</FormLabel>
+                  <FormLabel>IP Address or Hostname</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
-                      placeholder="192.168.1.100"
+                      placeholder="e.g., 192.168.1.100 or esp.local"
                       className="surface-elevated border-gray-600 focus:ring-status-neutral"
                     />
                   </FormControl>
                   <FormDescription>
-                    Enter the IP address of your ESPHome device
+                    Enter the IP address or hostname of your ESPHome device
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -214,7 +222,7 @@ export default function AddDeviceModal({
                     />
                   </FormControl>
                   <FormDescription>
-                    Default ESPHome API port is 6053
+                    Default port is 80 for REST or 6053 for native API
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

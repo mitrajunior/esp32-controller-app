@@ -1,7 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import axios from "axios";
+import esphomeApi from "esphome-native-api";
+const { Client: ESPHomeClient } = esphomeApi as any;
 import { storage } from "./storage";
-import { insertDeviceSchema, updateDeviceSchema, deviceCommandSchema } from "@shared/schema";
+import { insertDeviceSchema, updateDeviceSchema, deviceCommandSchema } from "@shared/model";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -41,7 +44,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Device with this IP already exists" });
       }
 
-      const device = await storage.createDevice(deviceData);
+      const detectedPort = await detectDevicePort(
+        deviceData.ip,
+        deviceData.port || 80,
+        deviceData.apiPassword || undefined,
+      );
+
+      if (detectedPort === null) {
+        return res.status(400).json({ message: "Device is not reachable" });
+      }
+
+      const device = await storage.createDevice({ ...deviceData, port: detectedPort });
       res.status(201).json(device);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -89,13 +102,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/devices/test-connection", async (req, res) => {
     try {
       const { ip, port, apiPassword } = req.body;
-      
-      // Simulate connection test (in real implementation, use ESPHome API)
-      const isReachable = await testDeviceConnection(ip, port, apiPassword);
-      
-      res.json({ 
-        success: isReachable,
-        message: isReachable ? "Device is reachable" : "Device is not reachable"
+
+      const detected = await detectDevicePort(ip, port || 80, apiPassword);
+
+      res.json({
+        success: detected !== null,
+        port: detected,
+        message: detected !== null ? "Device is reachable" : "Device is not reachable",
       });
     } catch (error) {
       res.status(500).json({ message: "Connection test failed" });
@@ -177,56 +190,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
   return httpServer;
 }
 
-// Utility functions (simulate ESPHome API calls)
+// Utility functions
+async function checkRest(ip: string): Promise<boolean> {
+  try {
+    await axios.get(`http://${ip}/status`, { timeout: 3000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function checkNative(ip: string, port: number, password?: string): Promise<boolean> {
+  const client = new ESPHomeClient({ host: ip, port, password });
+  try {
+    await client.connect();
+    await client.disconnect();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function detectDevicePort(ip: string, port: number, password?: string): Promise<number | null> {
+  if (await checkRest(ip)) return 80;
+  if (await checkNative(ip, 6053, password)) return 6053;
+  return null;
+}
+
 async function testDeviceConnection(ip: string, port: number, apiPassword?: string): Promise<boolean> {
-  // In real implementation: connect to ESPHome API at ip:port
-  // For now, simulate based on IP pattern
-  const ipParts = ip.split('.').map(Number);
-  return ipParts.every(part => part >= 0 && part <= 255) && port > 0 && port <= 65535;
+  const detected = await detectDevicePort(ip, port, apiPassword);
+  return detected !== null;
 }
 
 async function scanNetworkForDevices() {
-  // In real implementation: use mDNS discovery and IP range scanning
-  // For now, return empty array - devices should be added manually
-  return [];
+  // Discovery not implemented
+  return [] as any[];
 }
 
 async function sendDeviceCommand(device: any, command: any): Promise<any> {
-  // In real implementation: use ESPHome API to send commands
-  return { status: "executed", timestamp: new Date() };
+  if (device.port === 80) {
+    await axios.post(`http://${device.ip}/command`, command, { timeout: 5000 });
+    return { via: 'http' };
+  }
+
+  const client = new ESPHomeClient({ host: device.ip, port: device.port, password: device.apiPassword || undefined });
+  await client.connect();
+  // send generic service command
+  await client.executeService(command.command, command);
+  await client.disconnect();
+  return { via: 'native' };
 }
 
 async function getDeviceStatus(device: any): Promise<any> {
-  // In real implementation: query ESPHome API for device status and entities
-  const mockEntities = [];
-  
-  if (device.deviceType === 'light') {
-    mockEntities.push({
-      id: "led_strip",
-      name: "LED Strip",
-      type: "light",
-      state: { on: true, brightness: 85, color: { r: 255, g: 255, b: 255 } }
-    });
-  } else if (device.deviceType === 'sensor') {
-    mockEntities.push({
-      id: "temperature",
-      name: "Temperature",
-      type: "sensor",
-      state: { value: 23.5, unit: "°C" }
-    });
-  } else if (device.deviceType === 'switch') {
-    mockEntities.push({
-      id: "relay",
-      name: "Relay",
-      type: "switch",
-      state: { on: false }
-    });
+  if (device.port === 80) {
+    const res = await axios.get(`http://${device.ip}/status`, { timeout: 5000 });
+    return res.data;
   }
-  
-  return {
-    online: true,
-    uptime: "2h 34m",
-    signalStrength: "-45 dBm",
-    entities: mockEntities
-  };
+
+  const client = new ESPHomeClient({ host: device.ip, port: device.port, password: device.apiPassword || undefined });
+  await client.connect();
+  const status = await client.getStatus();
+  await client.disconnect();
+  return status;
 }
