@@ -6,6 +6,15 @@ import { storage } from "./storage";
 import { insertDeviceSchema, updateDeviceSchema, deviceCommandSchema } from "@shared/model";
 import { z } from "zod";
 
+async function resolveHost(host: string): Promise<string> {
+  try {
+    const res = await lookup(host);
+    return res.address;
+  } catch {
+    return host;
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   
   // Get all devices
@@ -199,6 +208,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 async function checkNative(ip: string, port: number, password?: string): Promise<boolean> {
 
+
   return null;
 }
 
@@ -213,12 +223,6 @@ async function scanNetworkForDevices() {
 }
 
 async function sendDeviceCommand(device: any, command: any): Promise<any> {
-  if (device.port === 80) {
-
-  return { via: 'native' };
-}
-
-async function getDeviceStatus(device: any): Promise<any> {
   if (device.port === 80) {
 
 }
