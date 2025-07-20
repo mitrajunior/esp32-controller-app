@@ -19,7 +19,8 @@
     "paths": {
       "@/*": ["./client/src/*"],
       "@shared/*": ["./shared/*"],
-      "esphome-native-api": ["./types/esphome-native-api.d.ts"]
+      "esphome-native-api": ["./types/esphome-native-api.d.ts"],
+      "multicast-dns": ["./types/multicast-dns.d.ts"]
     }
   }
 }
